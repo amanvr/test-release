@@ -10,12 +10,7 @@
     ".": {
       "release-type": "simple",
       "extra-files": [
-        "version.txt",
-        {
-          "type": "toml",
-          "path": "pyproject.toml",
-          "key": "project.version"
-        }
+        "version.txt"
       ]
     }
   }
