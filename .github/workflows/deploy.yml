@@ -1,0 +1,117 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g. "v0.1.0")'
+        required: true
+        type: string
+      deploy_to_pypi:
+        description: 'Deploy to PyPI registry'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  resolve_version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      clean_version: ${{ steps.resolve.outputs.clean_version }}
+      is_stable: ${{ steps.resolve.outputs.is_stable }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: resolve
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+
+          if [[ -z "$VERSION" ]]; then
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+
+          if [[ -z "$VERSION" ]]; then
+            echo "Error: No version provided and no tags found"
+            exit 1
+          fi
+
+          CLEAN_VERSION="${VERSION#v}"
+
+          if [[ "$CLEAN_VERSION" == *-rc.* ]]; then
+            IS_STABLE=false
+          else
+            IS_STABLE=true
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          echo "is_stable=$IS_STABLE" >> $GITHUB_OUTPUT
+
+          echo "Resolved version: $VERSION"
+          echo "Clean version: $CLEAN_VERSION"
+          echo "Is stable: $IS_STABLE"
+
+  build-wheel:
+    needs: [resolve_version]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build wheel
+        run: |
+          python -m build
+          echo "Built artifacts:"
+          ls -la dist/
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ github.sha }}
+          path: dist/
+          retention-days: 30
+
+  deploy-to-pypi:
+    needs: [resolve_version, build-wheel]
+    if: ${{ inputs.deploy_to_pypi }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-${{ github.sha }}
+          path: dist/
+
+      - name: Display artifacts
+        run: |
+          echo "Artifacts to upload:"
+          ls -la dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          attestations: false
+
+      - name: Publish to PyPI
+        if: ${{ needs.resolve_version.outputs.is_stable == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false

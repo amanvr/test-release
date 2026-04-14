@@ -1,0 +1,14 @@
+[project]
+name = "test-release-hello"
+version = "0.1.0"
+description = "A test project for release-please workflow testing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+hello = "hello:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

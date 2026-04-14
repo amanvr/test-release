@@ -1,0 +1,111 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Run hello
+        run: hello
+
+  check-release:
+    needs: [build-and-test]
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+    outputs:
+      released: ${{ steps.release-please.outputs.release_created }}
+      tag: ${{ steps.release-please.outputs.tag_name }}
+      release_type: ${{ steps.release-type.outputs.type }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-tags: true
+
+      - name: Determine release type
+        id: release-type
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          VERSION=$(jq -r '."."' .github/release-please-manifest.json)
+
+          echo "Current manifest version: $VERSION"
+          echo "Existing tags:"
+          git tag --list
+
+          RC_TAGS=$(git tag --list "v${VERSION}-rc.*" | head -1)
+          STABLE_TAG=$(git tag --list "v${VERSION}" | head -1)
+
+          echo "RC tags for v${VERSION}: $RC_TAGS"
+          echo "Stable tag v${VERSION}: $STABLE_TAG"
+
+          if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
+            echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
+            echo "type=stable" >> $GITHUB_OUTPUT
+            echo "release_as=${VERSION}" >> $GITHUB_OUTPUT
+            echo "Promotion detected: RC tags exist for v${VERSION}, releasing stable"
+          else
+            echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
+            echo "type=rc" >> $GITHUB_OUTPUT
+            echo "Normal development flow, using RC config"
+          fi
+
+      - name: Create Release
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: googleapis/release-please-action@v4
+        id: release-please
+        with:
+          manifest-file: .github/release-please-manifest.json
+          config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
+          target-branch: main
+          release-as: ${{ steps.release-type.outputs.release_as || '' }}
+
+  run-deploy-workflow:
+    needs: [check-release]
+    runs-on: ubuntu-24.04
+    if: ${{ needs.check-release.outputs.released && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Trigger Deploy workflow for release
+        run: |
+          if [[ "${{ needs.check-release.outputs.release_type }}" == "stable" ]]; then
+            IS_STABLE=true
+          else
+            IS_STABLE=false
+          fi
+
+          echo "Release type: ${{ needs.check-release.outputs.release_type }}"
+          echo "Tag: ${{ needs.check-release.outputs.tag }}"
+          echo "Is stable: $IS_STABLE"
+
+          gh workflow run deploy.yml \
+            --field version="${{ needs.check-release.outputs.tag }}" \
+            --field deploy_to_pypi=${IS_STABLE}
+        env:
+          GH_TOKEN: ${{ github.token }}
