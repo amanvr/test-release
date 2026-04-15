@@ -67,8 +67,13 @@ jobs:
           if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
             echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
             echo "type=stable" >> $GITHUB_OUTPUT
-            echo "release_as=${VERSION}" >> $GITHUB_OUTPUT
             echo "Promotion detected: RC tags exist for v${VERSION}, releasing stable"
+
+            # Inject release-as into config file (action input is ignored in manifest mode)
+            jq --arg v "$VERSION" '. + {"release-as": $v}' .github/release-please-config.json > /tmp/config.json
+            mv /tmp/config.json .github/release-please-config.json
+            echo "Added release-as: $VERSION to config file"
+            cat .github/release-please-config.json
           else
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
@@ -83,7 +88,6 @@ jobs:
           manifest-file: .github/release-please-manifest.json
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
-          release-as: ${{ steps.release-type.outputs.release_as || '' }}
 
   run-deploy-workflow:
     needs: [check-release]
