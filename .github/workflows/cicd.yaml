@@ -67,10 +67,12 @@ jobs:
           if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
             echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
             echo "type=stable" >> $GITHUB_OUTPUT
+            echo "versioning_strategy=default" >> $GITHUB_OUTPUT
             echo "Promotion detected: RC tags exist for v${VERSION}, releasing stable"
           else
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
+            echo "versioning_strategy=prerelease" >> $GITHUB_OUTPUT
             echo "Normal development flow, using RC config"
           fi
 
@@ -82,6 +84,7 @@ jobs:
           manifest-file: .github/release-please-manifest.json
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
+          versioning-strategy: ${{ steps.release-type.outputs.versioning_strategy || 'prerelease' }}
 
   run-deploy-workflow:
     needs: [check-release]
