@@ -6,7 +6,6 @@
   "include-component-in-tag": false,
   "include-v-in-tag": true,
   "changelog-path": ".github/CHANGELOG.md",
-  "release-as": "0.1.1",
   "packages": {
     ".": {
       "release-type": "simple",
