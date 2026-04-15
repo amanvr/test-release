@@ -111,3 +111,93 @@ jobs:
             --field deploy_to_pypi=${IS_STABLE}
         env:
           GH_TOKEN: ${{ github.token }}
+
+  bootstrap-next-rc-cycle:
+    needs: [check-release]
+    runs-on: ubuntu-24.04
+    if: ${{ needs.check-release.outputs.released && needs.check-release.outputs.release_type == 'stable' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Calculate next RC version
+        id: next-version
+        run: |
+          TAG="${{ needs.check-release.outputs.tag }}"
+          VERSION="${TAG#v}"
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          NEXT_MINOR=$((MINOR + 1))
+          NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc.0"
+
+          echo "current=$VERSION" >> $GITHUB_OUTPUT
+          echo "next=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "Stable release: $VERSION → Next RC cycle: $NEXT_VERSION"
+
+      - name: Check for existing bootstrap PR
+        id: check-pr
+        run: |
+          BRANCH="bootstrap/${{ steps.next-version.outputs.next }}"
+          EXISTING_PR=$(gh pr list --base main --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Bootstrap PR #${EXISTING_PR} already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "Deleting orphaned branch $BRANCH"
+            git push origin --delete "$BRANCH" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create bootstrap branch and PR
+        if: ${{ steps.check-pr.outputs.exists == 'false' }}
+        run: |
+          NEXT="${{ steps.next-version.outputs.next }}"
+          BRANCH="bootstrap/${NEXT}"
+
+          git checkout -b "$BRANCH"
+
+          jq --arg v "$NEXT" '."." = $v' .github/release-please-manifest.json > tmp.json
+          mv tmp.json .github/release-please-manifest.json
+
+          echo "$NEXT" > version.txt
+
+          if jq -e 'has("release-as")' .github/release-please-config.json > /dev/null 2>&1; then
+            jq 'del(."release-as")' .github/release-please-config.json > tmp.json
+            mv tmp.json .github/release-please-config.json
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: bootstrap $NEXT RC cycle after v${{ steps.next-version.outputs.current }} stable release"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: bootstrap $NEXT RC cycle" \
+            --body "## Summary
+
+          Bootstraps the next RC cycle after stable release v${{ steps.next-version.outputs.current }}.
+
+          ### What this PR does
+          - Updates manifest to \`$NEXT\`
+          - Updates version.txt to \`$NEXT\`
+          - Removes \`release-as\` from stable config (cleanup)
+
+          ### What happens when merged
+          - New development commits will trigger RC release PRs
+          - RC cycle continues: $NEXT → ${NEXT%.0}.1 → ... → stable
+
+          ---
+          **Previous Stable:** v${{ steps.next-version.outputs.current }}
+          **Next RC Cycle:** $NEXT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
