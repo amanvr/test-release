@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.4-rc.1](https://github.com/amanvr/test-release/compare/v0.1.4-rc.0...v0.1.4-rc.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* add versioning-strategy prerelease to only bump RC number ([ca8a6bb](https://github.com/amanvr/test-release/commit/ca8a6bb10c51e64890d8b476f928d69e4fb861ca))
+* fdfsff ([#16](https://github.com/amanvr/test-release/issues/16)) ([0f26f73](https://github.com/amanvr/test-release/commit/0f26f733433683ddac25630294cf936feba427d2))
+* implement release-as injection for proper RC version bumping ([4855be0](https://github.com/amanvr/test-release/commit/4855be0015d93d0b05f92b954b4e229b39ce89b1))
+* set versioning-strategy action input for proper RC bumping ([8da67b2](https://github.com/amanvr/test-release/commit/8da67b2f52407a5d88c5f1eb0147a3d52e2ca952))
+
 ## [0.1.4-rc.0](https://github.com/amanvr/test-release/compare/v0.1.3-rc.0...v0.1.4-rc.0) (2026-04-15)
 
 
