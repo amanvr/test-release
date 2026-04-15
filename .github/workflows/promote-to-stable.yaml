@@ -52,15 +52,21 @@ jobs:
           mv /tmp/manifest.json .github/release-please-manifest.json
           echo "Updated release-please-manifest.json to $CLEAN_VERSION"
 
+          # Add release-as to stable config (action input is ignored in manifest mode)
+          jq --arg v "$CLEAN_VERSION" '. + {"release-as": $v}' .github/release-please-config.json > /tmp/config.json
+          mv /tmp/config.json .github/release-please-config.json
+          echo "Added release-as: $CLEAN_VERSION to stable config"
+
           cat version.txt
           cat .github/release-please-manifest.json
+          cat .github/release-please-config.json
 
       - name: Commit and push version changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add version.txt .github/release-please-manifest.json
+          git add version.txt .github/release-please-manifest.json .github/release-please-config.json
           git commit -m "chore: promote ${{ steps.validate.outputs.rc_version }} to ${{ steps.validate.outputs.stable_version }}"
           git push
 
