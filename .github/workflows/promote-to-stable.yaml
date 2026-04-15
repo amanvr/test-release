@@ -1,12 +1,7 @@
-name: Promote RC to Stable
+name: Promote to Stable
 
 on:
   workflow_dispatch:
-    inputs:
-      rc_version:
-        description: 'RC version to promote (e.g. "v0.1.0-rc.1")'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -18,56 +13,103 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: main
 
-      - name: Validate RC version
-        id: validate
+      - name: Get current version
+        id: version
         run: |
-          RC_VERSION="${{ github.event.inputs.rc_version }}"
+          MANIFEST=".github/release-please-manifest.json"
+          CURRENT=$(jq -r '."."' "$MANIFEST")
+          STABLE=$(echo "$CURRENT" | sed 's/-rc\.[0-9]*$//')
 
-          if [[ ! "$RC_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            echo "Error: Invalid RC version format. Expected vX.Y.Z-rc.N"
+          echo "current=${CURRENT}" >> $GITHUB_OUTPUT
+          echo "stable=${STABLE}" >> $GITHUB_OUTPUT
+
+          if [[ "$CURRENT" != *-rc.* ]]; then
+            echo "Error: Current version $CURRENT is not an RC version. Nothing to promote."
             exit 1
           fi
 
-          STABLE_VERSION="${RC_VERSION%-rc.*}"
-          CLEAN_STABLE="${STABLE_VERSION#v}"
+          LATEST_RC=$(git tag --list "v${STABLE}-rc.*" --sort=-version:refname | head -1)
+          echo "latest_rc=${LATEST_RC:-v${CURRENT}}" >> $GITHUB_OUTPUT
 
-          echo "rc_version=$RC_VERSION" >> $GITHUB_OUTPUT
-          echo "stable_version=$STABLE_VERSION" >> $GITHUB_OUTPUT
-          echo "clean_stable=$CLEAN_STABLE" >> $GITHUB_OUTPUT
-
-          echo "RC version: $RC_VERSION"
-          echo "Stable version: $STABLE_VERSION"
-          echo "Clean stable: $CLEAN_STABLE"
-
-      - name: Update version files for stable release
+      - name: Check for existing promotion PR
+        id: check-pr
         run: |
-          CLEAN_VERSION="${{ steps.validate.outputs.clean_stable }}"
+          BRANCH="promote/${{ steps.version.outputs.stable }}"
+          EXISTING_PR=$(gh pr list --base main --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Error: Promotion PR #${EXISTING_PR} already exists for v${{ steps.version.outputs.stable }}"
+            echo "Please merge or close the existing PR first."
+            exit 1
+          fi
 
-          echo "$CLEAN_VERSION" > version.txt
-          echo "Updated version.txt to $CLEAN_VERSION"
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "Deleting orphaned branch $BRANCH from previous run"
+            git push origin --delete "$BRANCH" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          jq --arg v "$CLEAN_VERSION" '."." = $v' .github/release-please-manifest.json > /tmp/manifest.json
-          mv /tmp/manifest.json .github/release-please-manifest.json
-          echo "Updated release-please-manifest.json to $CLEAN_VERSION"
-
-          # Add release-as to stable config (action input is ignored in manifest mode)
-          jq --arg v "$CLEAN_VERSION" '. + {"release-as": $v}' .github/release-please-config.json > /tmp/config.json
-          mv /tmp/config.json .github/release-please-config.json
-          echo "Added release-as: $CLEAN_VERSION to stable config"
-
-          cat version.txt
-          cat .github/release-please-manifest.json
-          cat .github/release-please-config.json
-
-      - name: Commit and push version changes
+      - name: Create promotion branch
         run: |
+          BRANCH="promote/${{ steps.version.outputs.stable }}"
+          git checkout -b "$BRANCH"
+
+      - name: Graduate version in manifest and add release-as
+        run: |
+          MANIFEST=".github/release-please-manifest.json"
+          CURRENT="${{ steps.version.outputs.current }}"
+          STABLE="${{ steps.version.outputs.stable }}"
+
+          echo "Graduating version: $CURRENT → $STABLE"
+
+          jq --arg v "$STABLE" '."." = $v' "$MANIFEST" > tmp.json
+          mv tmp.json "$MANIFEST"
+
+          jq --arg v "$STABLE" '. + {"release-as": $v}' .github/release-please-config.json > tmp.json
+          mv tmp.json .github/release-please-config.json
+          echo "Added release-as: $STABLE to stable config"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST" .github/release-please-config.json
+          git commit -m "chore: promote ${{ steps.version.outputs.latest_rc }} to v$STABLE"
 
-          git add version.txt .github/release-please-manifest.json .github/release-please-config.json
-          git commit -m "chore: promote ${{ steps.validate.outputs.rc_version }} to ${{ steps.validate.outputs.stable_version }}"
-          git push
+      - name: Push branch and create PR
+        run: |
+          BRANCH="promote/${{ steps.version.outputs.stable }}"
+          git push origin "$BRANCH"
 
-          echo "Committed version changes. Release-please will create the stable release on next CI run."
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: promote ${{ steps.version.outputs.latest_rc }} to v${{ steps.version.outputs.stable }}" \
+            --body "## Summary
+
+          Promotes release candidate \`${{ steps.version.outputs.latest_rc }}\` to stable release \`v${{ steps.version.outputs.stable }}\`.
+
+          ### What this PR does
+          - Updates the release-please manifest from \`${{ steps.version.outputs.current }}\` to \`${{ steps.version.outputs.stable }}\`
+          - Adds \`release-as\` to stable config (required because release-please ignores action input in manifest mode)
+
+          ### What happens when merged
+          - CI/CD pipeline runs on main
+          - Release Please creates \`v${{ steps.version.outputs.stable }}\` stable release
+          - Deploy workflow runs
+
+          ---
+          **RC Tag:** \`${{ steps.version.outputs.latest_rc }}\`
+          **Stable Version:** \`v${{ steps.version.outputs.stable }}\`"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Promotion PR Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **RC Version:** ${{ steps.version.outputs.latest_rc }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stable Version:** v${{ steps.version.outputs.stable }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Merge the PR to trigger the stable release." >> $GITHUB_STEP_SUMMARY

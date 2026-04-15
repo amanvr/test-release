@@ -48,7 +48,7 @@ jobs:
         with:
           fetch-tags: true
 
-      - name: Determine release type and calculate next version
+      - name: Determine release type
         id: release-type
         if: ${{ github.ref == 'refs/heads/main' }}
         run: |
@@ -64,6 +64,10 @@ jobs:
           echo "RC tags for v${VERSION}: $RC_TAGS"
           echo "Stable tag v${VERSION}: $STABLE_TAG"
 
+          # Promotion scenario:
+          # 1. Manifest version is stable (no -rc suffix)
+          # 2. RC tags exist for this version
+          # 3. Stable tag doesn't exist yet
           if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
             echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
             echo "type=stable" >> $GITHUB_OUTPUT
@@ -72,33 +76,7 @@ jobs:
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
             echo "Normal development flow, using RC config"
-
-            if [[ "$VERSION" == *-rc.* ]]; then
-              BASE_VERSION="${VERSION%-rc.*}"
-              RC_NUM="${VERSION##*-rc.}"
-              NEXT_RC=$((RC_NUM + 1))
-              NEXT_VERSION="${BASE_VERSION}-rc.${NEXT_RC}"
-              echo "next_rc_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
-              echo "Calculated next RC version: $NEXT_VERSION"
-            fi
           fi
-
-      - name: Inject release-as for RC version
-        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.type == 'rc' && steps.release-type.outputs.next_rc_version != '' }}
-        run: |
-          NEXT_VERSION="${{ steps.release-type.outputs.next_rc_version }}"
-          echo "Injecting release-as: $NEXT_VERSION into RC config"
-
-          jq --arg v "$NEXT_VERSION" '. + {"release-as": $v}' .github/release-please-config-rc.json > /tmp/config.json
-          mv /tmp/config.json .github/release-please-config-rc.json
-
-          cat .github/release-please-config-rc.json
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/release-please-config-rc.json
-          git commit -m "chore: set release-as to $NEXT_VERSION for RC release" || echo "No changes to commit"
-          git push
 
       - name: Create Release
         if: ${{ github.ref == 'refs/heads/main' }}
@@ -108,23 +86,6 @@ jobs:
           manifest-file: .github/release-please-manifest.json
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
-
-      - name: Cleanup release-as from RC config
-        if: ${{ github.ref == 'refs/heads/main' && steps.release-please.outputs.release_created == 'true' && steps.release-type.outputs.type == 'rc' }}
-        run: |
-          git pull origin main
-
-          if jq -e 'has("release-as")' .github/release-please-config-rc.json > /dev/null 2>&1; then
-            echo "Removing release-as from RC config after successful release"
-            jq 'del(."release-as")' .github/release-please-config-rc.json > /tmp/config.json
-            mv /tmp/config.json .github/release-please-config-rc.json
-
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .github/release-please-config-rc.json
-            git commit -m "chore: remove release-as after RC release"
-            git push
-          fi
 
   run-deploy-workflow:
     needs: [check-release]
