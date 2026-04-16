@@ -22,3 +22,4 @@ hello
 # New cycle test Thu 16 Apr 2026 09:58:46 BST
 # No cleanup test Thu 16 Apr 2026 11:36:50 BST
 # E2E Test 1 Thu 16 Apr 2026 11:53:05 BST
+# E2E Test 2 - should fail Thu 16 Apr 2026 11:55:50 BST
