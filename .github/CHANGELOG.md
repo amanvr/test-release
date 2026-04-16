@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1-rc.2](https://github.com/amanvr/test-release/compare/v0.4.1-rc.1...v0.4.1-rc.2) (2026-04-16)
+
+
+### Bug Fixes
+
+* another test fix ([#47](https://github.com/amanvr/test-release/issues/47)) ([8aaba92](https://github.com/amanvr/test-release/commit/8aaba92fdef1c0987d01196f855cedd7355d23d8))
+
 ## [0.4.1-rc.1](https://github.com/amanvr/test-release/compare/v0.4.1-rc.0...v0.4.1-rc.1) (2026-04-16)
 
 
