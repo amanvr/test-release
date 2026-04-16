@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0-rc.2](https://github.com/amanvr/test-release/compare/v0.5.0-rc.1...v0.5.0-rc.2) (2026-04-16)
+
+
+### Bug Fixes
+
+* remove separate cleanup PR, include in bootstrap instead ([d96bb7f](https://github.com/amanvr/test-release/commit/d96bb7f5074b34eccfa4bc2697476375b5ae0505))
+* test without cleanup PR ([#59](https://github.com/amanvr/test-release/issues/59)) ([f9796e4](https://github.com/amanvr/test-release/commit/f9796e4db9026e3a84b9be9086bae606c7612adb))
+
 ## [0.5.0-rc.1](https://github.com/amanvr/test-release/compare/v0.5.0-rc.1...v0.5.0-rc.1) (2026-04-16)
 
 
