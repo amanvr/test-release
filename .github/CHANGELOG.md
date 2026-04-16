@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0-rc.2](https://github.com/amanvr/test-release/compare/v0.5.0-rc.2...v0.5.0-rc.2) (2026-04-16)
+
+
+### Bug Fixes
+
+* df ([#61](https://github.com/amanvr/test-release/issues/61)) ([7108756](https://github.com/amanvr/test-release/commit/7108756f39647117375ba920ce6aef519ee13fd1))
+
 ## [0.5.0-rc.2](https://github.com/amanvr/test-release/compare/v0.5.0-rc.1...v0.5.0-rc.2) (2026-04-16)
 
 
