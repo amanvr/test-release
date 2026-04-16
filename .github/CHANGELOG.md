@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0-rc.2](https://github.com/amanvr/test-release/compare/v0.6.0-rc.1...v0.6.0-rc.2) (2026-04-16)
+
+
+### Bug Fixes
+
+* e2e test 2 - should trigger stale detection ([#67](https://github.com/amanvr/test-release/issues/67)) ([fd57e28](https://github.com/amanvr/test-release/commit/fd57e283b91e0fe53768f6fa9beac88468bb71a1))
+
 ## [0.6.0-rc.1](https://github.com/amanvr/test-release/compare/v0.6.0-rc.0...v0.6.0-rc.1) (2026-04-16)
 
 
