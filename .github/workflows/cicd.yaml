@@ -71,45 +71,38 @@ jobs:
           if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
             echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
             echo "type=stable" >> $GITHUB_OUTPUT
-            echo "versioning_strategy=default" >> $GITHUB_OUTPUT
-            echo "skip_release=false" >> $GITHUB_OUTPUT
+            echo "release_as=${VERSION}" >> $GITHUB_OUTPUT
             echo "Promotion detected: RC tags exist for v${VERSION}, releasing stable"
           else
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
-            echo "versioning_strategy=prerelease" >> $GITHUB_OUTPUT
 
-            # Check if release-as in RC config already has a tag (stale release-as)
-            RELEASE_AS=$(jq -r '."release-as" // empty' .github/release-please-config-rc.json)
-            if [[ -n "$RELEASE_AS" ]]; then
-              RELEASE_AS_TAG="v${RELEASE_AS}"
-              if git tag --list "$RELEASE_AS_TAG" | grep -q "$RELEASE_AS_TAG"; then
-                echo "::warning::Stale release-as detected: $RELEASE_AS already released. Run 'Set Next RC Version' workflow first."
-                echo "skip_release=true" >> $GITHUB_OUTPUT
-              else
-                echo "skip_release=false" >> $GITHUB_OUTPUT
-              fi
+            # Calculate correct RC version (workaround for release-please prerelease bug)
+            # Find the highest existing RC tag for this base version
+            HIGHEST_RC=$(git tag --list "v${VERSION}-rc.*" | sed 's/.*-rc\.//' | sort -n | tail -1)
+
+            if [[ -n "$HIGHEST_RC" ]]; then
+              NEXT_RC=$((HIGHEST_RC + 1))
+              NEXT_VERSION="${VERSION}-rc.${NEXT_RC}"
+              echo "Existing RC tags found. Highest: rc.${HIGHEST_RC} → Next: ${NEXT_VERSION}"
             else
-              echo "skip_release=false" >> $GITHUB_OUTPUT
+              NEXT_VERSION="${VERSION}-rc.0"
+              echo "No RC tags found. Starting RC cycle: ${NEXT_VERSION}"
             fi
-            echo "Normal development flow, using RC config with prerelease versioning"
+
+            echo "release_as=${NEXT_VERSION}" >> $GITHUB_OUTPUT
+            echo "RC release: ${NEXT_VERSION}"
           fi
 
       - name: Create Release
-        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip_release != 'true' }}
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: googleapis/release-please-action@v4
         id: release-please
         with:
           manifest-file: .github/release-please-manifest.json
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
-          versioning-strategy: ${{ steps.release-type.outputs.versioning_strategy || 'prerelease' }}
-
-      - name: Skipped release notice
-        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip_release == 'true' }}
-        run: |
-          echo "::error::Release skipped due to stale release-as. Run the 'Set Next RC Version' workflow to set the correct version, then merge fixes."
-          exit 1
+          release-as: ${{ steps.release-type.outputs.release_as || '' }}
 
   run-deploy-workflow:
     needs: [check-release]
