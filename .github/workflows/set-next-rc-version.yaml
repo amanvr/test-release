@@ -1,0 +1,110 @@
+name: Set Next RC Version
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  set-rc-version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Calculate next RC version
+        id: version
+        run: |
+          MANIFEST=".github/release-please-manifest.json"
+          CURRENT=$(jq -r '."."' "$MANIFEST")
+
+          echo "Current manifest version: $CURRENT"
+
+          if [[ "$CURRENT" != *-rc.* ]]; then
+            echo "Error: Current version $CURRENT is not an RC version."
+            echo "This workflow only works during an RC cycle."
+            exit 1
+          fi
+
+          BASE_VERSION="${CURRENT%-rc.*}"
+          RC_NUM="${CURRENT##*-rc.}"
+          NEXT_RC=$((RC_NUM + 1))
+          NEXT_VERSION="${BASE_VERSION}-rc.${NEXT_RC}"
+
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "next=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "Calculated next RC version: $NEXT_VERSION"
+
+      - name: Check for existing PR
+        id: check-pr
+        run: |
+          BRANCH="set-rc-version/${{ steps.version.outputs.next }}"
+          EXISTING_PR=$(gh pr list --base main --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #${EXISTING_PR} already exists for this version"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "Deleting orphaned branch $BRANCH"
+            git push origin --delete "$BRANCH" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create branch and PR with release-as
+        if: ${{ steps.check-pr.outputs.exists == 'false' }}
+        run: |
+          NEXT="${{ steps.version.outputs.next }}"
+          BRANCH="set-rc-version/${NEXT}"
+
+          git checkout -b "$BRANCH"
+
+          jq --arg v "$NEXT" '. + {"release-as": $v}' .github/release-please-config-rc.json > tmp.json
+          mv tmp.json .github/release-please-config-rc.json
+
+          echo "Updated RC config:"
+          cat .github/release-please-config-rc.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/release-please-config-rc.json
+          git commit -m "chore: set release-as to $NEXT for next RC release"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: set next RC version to $NEXT" \
+            --body "## Summary
+
+          Sets the next RC version to \`$NEXT\` using \`release-as\` in the RC config.
+
+          ### Why this is needed
+          Release-please's prerelease versioning strategy has a bug that bumps the base version instead of just the RC number. This workaround injects the correct version via \`release-as\`.
+
+          ### Instructions
+          1. Merge this PR first
+          2. Then merge your fix/feature PRs
+          3. Release-please will create a release PR for \`$NEXT\`
+
+          ---
+          **Current Version:** ${{ steps.version.outputs.current }}
+          **Next Version:** $NEXT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Next RC Version Set" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Current:** ${{ steps.version.outputs.current }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next:** ${{ steps.version.outputs.next }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Merge the PR, then merge your fix PRs." >> $GITHUB_STEP_SUMMARY

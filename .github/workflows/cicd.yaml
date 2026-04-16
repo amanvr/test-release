@@ -115,6 +115,59 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  cleanup-release-as:
+    needs: [check-release]
+    runs-on: ubuntu-24.04
+    if: ${{ needs.check-release.outputs.released && needs.check-release.outputs.release_type == 'rc' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Check if cleanup needed
+        id: check-cleanup
+        run: |
+          if jq -e 'has("release-as")' .github/release-please-config-rc.json > /dev/null 2>&1; then
+            echo "needs_cleanup=true" >> $GITHUB_OUTPUT
+            echo "release-as found in RC config, cleanup needed"
+          else
+            echo "needs_cleanup=false" >> $GITHUB_OUTPUT
+            echo "No release-as in RC config, skipping cleanup"
+          fi
+
+      - name: Create cleanup PR
+        if: ${{ steps.check-cleanup.outputs.needs_cleanup == 'true' }}
+        run: |
+          BRANCH="cleanup-release-as-${{ needs.check-release.outputs.tag }}"
+
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            git push origin --delete "$BRANCH" || true
+          fi
+
+          git checkout -b "$BRANCH"
+
+          jq 'del(."release-as")' .github/release-please-config-rc.json > tmp.json
+          mv tmp.json .github/release-please-config-rc.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/release-please-config-rc.json
+          git commit -m "chore: remove release-as after ${{ needs.check-release.outputs.tag }} release"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: cleanup release-as after ${{ needs.check-release.outputs.tag }}" \
+            --body "## Summary
+
+          Removes \`release-as\` from RC config after ${{ needs.check-release.outputs.tag }} release.
+
+          This cleanup is required to prevent duplicate release attempts."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   bootstrap-next-rc-cycle:
     needs: [check-release]
     runs-on: ubuntu-24.04
