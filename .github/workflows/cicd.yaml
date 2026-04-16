@@ -72,16 +72,31 @@ jobs:
             echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
             echo "type=stable" >> $GITHUB_OUTPUT
             echo "versioning_strategy=default" >> $GITHUB_OUTPUT
+            echo "skip_release=false" >> $GITHUB_OUTPUT
             echo "Promotion detected: RC tags exist for v${VERSION}, releasing stable"
           else
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
             echo "versioning_strategy=prerelease" >> $GITHUB_OUTPUT
+
+            # Check if release-as in RC config already has a tag (stale release-as)
+            RELEASE_AS=$(jq -r '."release-as" // empty' .github/release-please-config-rc.json)
+            if [[ -n "$RELEASE_AS" ]]; then
+              RELEASE_AS_TAG="v${RELEASE_AS}"
+              if git tag --list "$RELEASE_AS_TAG" | grep -q "$RELEASE_AS_TAG"; then
+                echo "::warning::Stale release-as detected: $RELEASE_AS already released. Run 'Set Next RC Version' workflow first."
+                echo "skip_release=true" >> $GITHUB_OUTPUT
+              else
+                echo "skip_release=false" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "skip_release=false" >> $GITHUB_OUTPUT
+            fi
             echo "Normal development flow, using RC config with prerelease versioning"
           fi
 
       - name: Create Release
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip_release != 'true' }}
         uses: googleapis/release-please-action@v4
         id: release-please
         with:
@@ -89,6 +104,12 @@ jobs:
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
           versioning-strategy: ${{ steps.release-type.outputs.versioning_strategy || 'prerelease' }}
+
+      - name: Skipped release notice
+        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip_release == 'true' }}
+        run: |
+          echo "::error::Release skipped due to stale release-as. Run the 'Set Next RC Version' workflow to set the correct version, then merge fixes."
+          exit 1
 
   run-deploy-workflow:
     needs: [check-release]
