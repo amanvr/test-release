@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.1-rc.1](https://github.com/amanvr/test-release/compare/v0.4.1-rc.0...v0.4.1-rc.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* add set-next-rc-version workflow and cleanup job for proper RC versioning ([2f287d3](https://github.com/amanvr/test-release/commit/2f287d31337b2efa08f16577a3f5ac72dd2b9d57))
+* add versioning-strategy input to release-please action for proper RC bumping ([3a1412e](https://github.com/amanvr/test-release/commit/3a1412ee0ee8ddcd677143c06f503b11f3598514))
+* dewsfdfsd ([#38](https://github.com/amanvr/test-release/issues/38)) ([485b10a](https://github.com/amanvr/test-release/commit/485b10a92d7dd237fe0b3baaa1c594a33ddb61ce))
+* test proper RC increment ([#44](https://github.com/amanvr/test-release/issues/44)) ([1b62a72](https://github.com/amanvr/test-release/commit/1b62a72da87e6ad90c7e84f563314244646c58e9))
+
 ## [0.4.1-rc.0](https://github.com/amanvr/test-release/compare/v0.4.0-rc.0...v0.4.1-rc.0) (2026-04-15)
 
 
