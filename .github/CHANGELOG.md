@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0-rc.1](https://github.com/amanvr/test-release/compare/v0.7.0-rc.1...v0.7.0-rc.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* auto-calculate RC version from tags ([#77](https://github.com/amanvr/test-release/issues/77)) ([bf3931c](https://github.com/amanvr/test-release/commit/bf3931c4d66d13f0271147eca9f9426ffa78d3a3))
+* hello ([#76](https://github.com/amanvr/test-release/issues/76)) ([f0ba557](https://github.com/amanvr/test-release/commit/f0ba55730efae11ae2b926e287c172a8eca58712))
+
 ## [0.7.0-rc.1](https://github.com/amanvr/test-release/compare/v0.7.0-rc.0...v0.7.0-rc.1) (2026-04-16)
 
 
