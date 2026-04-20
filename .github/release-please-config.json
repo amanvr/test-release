@@ -13,5 +13,6 @@
         "version.txt"
       ]
     }
-  }
+  },
+  "release-as": "0.7.0"
 }
