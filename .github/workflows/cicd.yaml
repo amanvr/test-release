@@ -52,67 +52,43 @@ jobs:
         id: release-type
         if: ${{ github.ref == 'refs/heads/main' }}
         run: |
-          MANIFEST_VERSION=$(jq -r '."."' .github/release-please-manifest.json)
+          VERSION=$(jq -r '."."' .github/release-please-manifest.json)
 
           # Extract base version (remove -rc.* suffix if present)
-          BASE_VERSION="${MANIFEST_VERSION%-rc.*}"
+          BASE_VERSION="${VERSION%-rc.*}"
 
-          echo "Manifest version: $MANIFEST_VERSION"
-          echo "Base version: $BASE_VERSION"
-          echo "Existing tags:"
-          git tag --list
-
+          # Promotion scenario:
+          # 1. Manifest version is stable (no -rc suffix)
+          # 2. RC tags exist for this version (v0.7.0-rc.*)
+          # 3. Stable tag doesn't exist yet (v0.7.0)
+          RC_TAGS=$(git tag --list "v${BASE_VERSION}-rc.*" | head -1)
           STABLE_TAG=$(git tag --list "v${BASE_VERSION}" | head -1)
 
+          echo "Manifest version: $VERSION"
+          echo "Base version: $BASE_VERSION"
+          echo "RC tags for v${BASE_VERSION}: $RC_TAGS"
           echo "Stable tag v${BASE_VERSION}: $STABLE_TAG"
 
-          # Stable promotion: only when stable tag already exists for this version
-          # This means someone manually ran promote-to-stable workflow
-          if [[ -n "$STABLE_TAG" ]]; then
-            echo "Stable tag exists for v${BASE_VERSION}, skipping (already released)"
-            echo "skip=true" >> $GITHUB_OUTPUT
+          if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
+            echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
+            echo "type=stable" >> $GITHUB_OUTPUT
+            echo "release_as=${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "Promotion detected: RC tags exist for v${BASE_VERSION}, releasing stable"
           else
-            # Always create RC releases - promotion is manual via separate workflow
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
-
-            # Calculate correct RC version from existing tags
-            HIGHEST_RC=$(git tag --list "v${BASE_VERSION}-rc.*" | sed 's/.*-rc\.//' | sort -n | tail -1)
-
-            if [[ -n "$HIGHEST_RC" ]]; then
-              NEXT_RC=$((HIGHEST_RC + 1))
-              NEXT_VERSION="${BASE_VERSION}-rc.${NEXT_RC}"
-              echo "Existing RC tags found. Highest: rc.${HIGHEST_RC} → Next: ${NEXT_VERSION}"
-            else
-              NEXT_VERSION="${BASE_VERSION}-rc.0"
-              echo "No RC tags found. Starting RC cycle: ${NEXT_VERSION}"
-            fi
-
-            echo "release_as=${NEXT_VERSION}" >> $GITHUB_OUTPUT
-            echo "RC release: ${NEXT_VERSION}"
+            echo "Normal development flow, using RC config"
           fi
 
-      - name: Update config with release-as
-        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip != 'true' && steps.release-type.outputs.release_as != '' }}
-        run: |
-          VERSION="${{ steps.release-type.outputs.release_as }}"
-          CONFIG="${{ steps.release-type.outputs.config }}"
-
-          echo "Setting release-as to ${VERSION} in ${CONFIG}"
-          jq --arg v "$VERSION" '. + {"release-as": $v}' "$CONFIG" > tmp.json
-          mv tmp.json "$CONFIG"
-
-          echo "Updated config:"
-          cat "$CONFIG"
-
       - name: Create Release
-        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip != 'true' }}
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: googleapis/release-please-action@v4
         id: release-please
         with:
           manifest-file: .github/release-please-manifest.json
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
+          release-as: ${{ steps.release-type.outputs.release_as || '' }}
 
   run-deploy-workflow:
     needs: [check-release]
