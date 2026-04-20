@@ -7,14 +7,10 @@
   "include-v-in-tag": true,
   "prerelease": true,
   "prerelease-type": "rc",
-  "versioning-strategy": "prerelease",
   "changelog-path": ".github/CHANGELOG.md",
   "packages": {
     ".": {
       "release-type": "simple",
-      "prerelease": true,
-      "prerelease-type": "rc",
-      "versioning-strategy": "prerelease",
       "extra-files": [
         "version.txt"
       ]
