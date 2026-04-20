@@ -62,27 +62,21 @@ jobs:
           echo "Existing tags:"
           git tag --list
 
-          RC_TAGS=$(git tag --list "v${BASE_VERSION}-rc.*" | head -1)
           STABLE_TAG=$(git tag --list "v${BASE_VERSION}" | head -1)
 
-          echo "RC tags for v${BASE_VERSION}: $RC_TAGS"
           echo "Stable tag v${BASE_VERSION}: $STABLE_TAG"
 
-          # Promotion scenario:
-          # 1. Manifest version is stable (no -rc suffix)
-          # 2. RC tags exist for this version
-          # 3. Stable tag doesn't exist yet
-          if [[ "$MANIFEST_VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
-            echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
-            echo "type=stable" >> $GITHUB_OUTPUT
-            echo "release_as=${BASE_VERSION}" >> $GITHUB_OUTPUT
-            echo "Promotion detected: RC tags exist for v${BASE_VERSION}, releasing stable"
+          # Stable promotion: only when stable tag already exists for this version
+          # This means someone manually ran promote-to-stable workflow
+          if [[ -n "$STABLE_TAG" ]]; then
+            echo "Stable tag exists for v${BASE_VERSION}, skipping (already released)"
+            echo "skip=true" >> $GITHUB_OUTPUT
           else
+            # Always create RC releases - promotion is manual via separate workflow
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
 
-            # Calculate correct RC version (workaround for release-please prerelease bug)
-            # Find the highest existing RC tag for this base version
+            # Calculate correct RC version from existing tags
             HIGHEST_RC=$(git tag --list "v${BASE_VERSION}-rc.*" | sed 's/.*-rc\.//' | sort -n | tail -1)
 
             if [[ -n "$HIGHEST_RC" ]]; then
@@ -99,7 +93,7 @@ jobs:
           fi
 
       - name: Create Release
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip != 'true' }}
         uses: googleapis/release-please-action@v4
         id: release-please
         with:
