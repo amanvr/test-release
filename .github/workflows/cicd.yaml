@@ -92,6 +92,19 @@ jobs:
             echo "RC release: ${NEXT_VERSION}"
           fi
 
+      - name: Update config with release-as
+        if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip != 'true' && steps.release-type.outputs.release_as != '' }}
+        run: |
+          VERSION="${{ steps.release-type.outputs.release_as }}"
+          CONFIG="${{ steps.release-type.outputs.config }}"
+
+          echo "Setting release-as to ${VERSION} in ${CONFIG}"
+          jq --arg v "$VERSION" '. + {"release-as": $v}' "$CONFIG" > tmp.json
+          mv tmp.json "$CONFIG"
+
+          echo "Updated config:"
+          cat "$CONFIG"
+
       - name: Create Release
         if: ${{ github.ref == 'refs/heads/main' && steps.release-type.outputs.skip != 'true' }}
         uses: googleapis/release-please-action@v4
@@ -100,7 +113,6 @@ jobs:
           manifest-file: .github/release-please-manifest.json
           config-file: ${{ steps.release-type.outputs.config || '.github/release-please-config-rc.json' }}
           target-branch: main
-          release-as: ${{ steps.release-type.outputs.release_as || '' }}
 
   run-deploy-workflow:
     needs: [check-release]
