@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0-rc.2](https://github.com/amanvr/test-release/compare/v0.7.0-rc.1...v0.7.0-rc.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* align manifest with last release and add versioning strategy ([00985a4](https://github.com/amanvr/test-release/commit/00985a4265bfa759db9c1d6fe41a76a5632e197e))
+* align manifest with last release and add versioning strategy ([fd2cb9d](https://github.com/amanvr/test-release/commit/fd2cb9d882bc4c04d5879f8156552c63ac57888b))
+* always create RC releases, remove auto-promotion ([#87](https://github.com/amanvr/test-release/issues/87)) ([bc11b8e](https://github.com/amanvr/test-release/commit/bc11b8eef386bfbf83980dd12d34a21ad1640564))
+* auto-calculate RC version from tags ([#77](https://github.com/amanvr/test-release/issues/77)) ([bf3931c](https://github.com/amanvr/test-release/commit/bf3931c4d66d13f0271147eca9f9426ffa78d3a3))
+* extract base version from manifest for correct RC calculation ([#79](https://github.com/amanvr/test-release/issues/79)) ([e4f5160](https://github.com/amanvr/test-release/commit/e4f516092ab6b923cbd74443d77cbf8b2c67fe38))
+* hello ([#76](https://github.com/amanvr/test-release/issues/76)) ([f0ba557](https://github.com/amanvr/test-release/commit/f0ba55730efae11ae2b926e287c172a8eca58712))
+* remove stale release-as from RC config ([#81](https://github.com/amanvr/test-release/issues/81)) ([6bcdb4f](https://github.com/amanvr/test-release/commit/6bcdb4f8d32163ec680e7a29d7b772035bbdabd0))
+* remove versioning-strategy to let release-as take precedence ([#83](https://github.com/amanvr/test-release/issues/83)) ([c20c509](https://github.com/amanvr/test-release/commit/c20c5092460f149295fd7ad71e8c2124c35137fe))
+* set manifest to base version (0.7.0) for proper release-as handling ([#85](https://github.com/amanvr/test-release/issues/85)) ([c239714](https://github.com/amanvr/test-release/commit/c239714d147354a0299094ab974945eaa0ae2795))
+* write release-as to config file instead of action input ([96ccab9](https://github.com/amanvr/test-release/commit/96ccab9f20130bf075b59403cafa6919e2df445e))
+* write release-as to config file instead of action input ([754d48a](https://github.com/amanvr/test-release/commit/754d48a2b20acfdb52a689ac3eb6181e67430ed5))
+
 ## [0.7.0-rc.1](https://github.com/amanvr/test-release/compare/v0.7.0-rc.1...v0.7.0-rc.1) (2026-04-17)
 
 
