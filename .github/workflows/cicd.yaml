@@ -52,41 +52,45 @@ jobs:
         id: release-type
         if: ${{ github.ref == 'refs/heads/main' }}
         run: |
-          VERSION=$(jq -r '."."' .github/release-please-manifest.json)
+          MANIFEST_VERSION=$(jq -r '."."' .github/release-please-manifest.json)
 
-          echo "Current manifest version: $VERSION"
+          # Extract base version (remove -rc.* suffix if present)
+          BASE_VERSION="${MANIFEST_VERSION%-rc.*}"
+
+          echo "Manifest version: $MANIFEST_VERSION"
+          echo "Base version: $BASE_VERSION"
           echo "Existing tags:"
           git tag --list
 
-          RC_TAGS=$(git tag --list "v${VERSION}-rc.*" | head -1)
-          STABLE_TAG=$(git tag --list "v${VERSION}" | head -1)
+          RC_TAGS=$(git tag --list "v${BASE_VERSION}-rc.*" | head -1)
+          STABLE_TAG=$(git tag --list "v${BASE_VERSION}" | head -1)
 
-          echo "RC tags for v${VERSION}: $RC_TAGS"
-          echo "Stable tag v${VERSION}: $STABLE_TAG"
+          echo "RC tags for v${BASE_VERSION}: $RC_TAGS"
+          echo "Stable tag v${BASE_VERSION}: $STABLE_TAG"
 
           # Promotion scenario:
           # 1. Manifest version is stable (no -rc suffix)
           # 2. RC tags exist for this version
           # 3. Stable tag doesn't exist yet
-          if [[ "$VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
+          if [[ "$MANIFEST_VERSION" != *-rc.* && -n "$RC_TAGS" && -z "$STABLE_TAG" ]]; then
             echo "config=.github/release-please-config.json" >> $GITHUB_OUTPUT
             echo "type=stable" >> $GITHUB_OUTPUT
-            echo "release_as=${VERSION}" >> $GITHUB_OUTPUT
-            echo "Promotion detected: RC tags exist for v${VERSION}, releasing stable"
+            echo "release_as=${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "Promotion detected: RC tags exist for v${BASE_VERSION}, releasing stable"
           else
             echo "config=.github/release-please-config-rc.json" >> $GITHUB_OUTPUT
             echo "type=rc" >> $GITHUB_OUTPUT
 
             # Calculate correct RC version (workaround for release-please prerelease bug)
             # Find the highest existing RC tag for this base version
-            HIGHEST_RC=$(git tag --list "v${VERSION}-rc.*" | sed 's/.*-rc\.//' | sort -n | tail -1)
+            HIGHEST_RC=$(git tag --list "v${BASE_VERSION}-rc.*" | sed 's/.*-rc\.//' | sort -n | tail -1)
 
             if [[ -n "$HIGHEST_RC" ]]; then
               NEXT_RC=$((HIGHEST_RC + 1))
-              NEXT_VERSION="${VERSION}-rc.${NEXT_RC}"
+              NEXT_VERSION="${BASE_VERSION}-rc.${NEXT_RC}"
               echo "Existing RC tags found. Highest: rc.${HIGHEST_RC} → Next: ${NEXT_VERSION}"
             else
-              NEXT_VERSION="${VERSION}-rc.0"
+              NEXT_VERSION="${BASE_VERSION}-rc.0"
               echo "No RC tags found. Starting RC cycle: ${NEXT_VERSION}"
             fi
 
@@ -139,7 +143,7 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Calculate next RC version
+      - name: Calculate next version
         id: next-version
         run: |
           TAG="${{ needs.check-release.outputs.tag }}"
@@ -147,11 +151,12 @@ jobs:
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           NEXT_MINOR=$((MINOR + 1))
-          NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0-rc.0"
+          # Set manifest to base version only - RC number calculated from tags
+          NEXT_VERSION="${MAJOR}.${NEXT_MINOR}.0"
 
           echo "current=$VERSION" >> $GITHUB_OUTPUT
           echo "next=$NEXT_VERSION" >> $GITHUB_OUTPUT
-          echo "Stable release: $VERSION → Next RC cycle: $NEXT_VERSION"
+          echo "Stable release: $VERSION → Next version: $NEXT_VERSION (RC numbers auto-calculated)"
 
       - name: Check for existing bootstrap PR
         id: check-pr
@@ -204,22 +209,21 @@ jobs:
           gh pr create \
             --base main \
             --head "$BRANCH" \
-            --title "chore: bootstrap $NEXT RC cycle" \
+            --title "chore: bootstrap v$NEXT development cycle" \
             --body "## Summary
 
-          Bootstraps the next RC cycle after stable release v${{ steps.next-version.outputs.current }}.
+          Bootstraps the next development cycle after stable release v${{ steps.next-version.outputs.current }}.
 
           ### What this PR does
           - Updates manifest to \`$NEXT\`
           - Updates version.txt to \`$NEXT\`
-          - Removes \`release-as\` from stable config (cleanup)
 
           ### What happens when merged
-          - New development commits will trigger RC release PRs
-          - RC cycle continues: $NEXT → ${NEXT%.0}.1 → ... → stable
+          - First RC release will be v${NEXT}-rc.0
+          - Subsequent releases: v${NEXT}-rc.1 → rc.2 → ... → v${NEXT} (stable)
 
           ---
           **Previous Stable:** v${{ steps.next-version.outputs.current }}
-          **Next RC Cycle:** $NEXT"
+          **Next Version:** $NEXT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
